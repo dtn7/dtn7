@@ -66,7 +66,7 @@ func (client *MTCPClient) Start() (err error, retry bool) {
 		return
 	}
 
-	client.reportChan = make(chan cla.ConvergenceStatus)
+	client.reportChan = make(chan cla.ConvergenceStatus, cla.ReportChannelBuffer)
 	client.stopSyn = make(chan struct{})
 	client.stopAck = make(chan struct{})
 
@@ -104,7 +104,12 @@ func (client *MTCPClient) handler() {
 					"error":  err,
 				}).Error("MTCPClient: Keepalive errored")
 
-				client.reportChan <- cla.NewConvergencePeerDisappeared(client, client.GetPeerEndpointID())
+				select {
+				case client.reportChan <- cla.NewConvergencePeerDisappeared(client, client.GetPeerEndpointID()):
+					continue
+				default:
+					log.WithField("client", client.String()).Error("MTCPClient: Reporting channel full or no consumer")
+				}
 			}
 		}
 	}
